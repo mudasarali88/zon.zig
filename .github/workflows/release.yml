@@ -53,10 +53,8 @@ jobs:
         run: |
           mkdir -p release
           if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            # Copy windows static lib
             cp zig-out/lib/zon.lib release/zon-${{ matrix.target }}.lib || true
           else
-            # Copy unix static lib
             cp zig-out/lib/libzon.a release/libzon-${{ matrix.target }}.a || true
           fi
 
@@ -85,7 +83,6 @@ jobs:
         id: calc_hash
         run: |
           zig fetch --save ${{ steps.get_url.outputs.url }}
-          # Extract hash from build.zig.zon (it's updated by zig fetch)
           HASH=$(grep '.hash =' build.zig.zon | cut -d '"' -f 2)
           echo "hash=$HASH" >> $GITHUB_OUTPUT
 
@@ -95,7 +92,7 @@ jobs:
           body: |
             ${{ github.event.release.body }}
 
-            ## � Installation
+            ## 📦 Installation
 
             ### Option A — Automatic (Recommended)
 
@@ -164,18 +161,18 @@ jobs:
 
             | Platform | Architecture | File |
             |----------|--------------|------|
-            | Windows | x86_64 | [zon-x86_64-windows.lib](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/zon-x86_64-windows.lib) |
-            | Windows | x86 | [zon-x86-windows.lib](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/zon-x86-windows.lib) |
-            | Linux | x86_64 | [libzon-x86_64-linux.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-x86_64-linux.a) |
-            | Linux | x86 | [libzon-x86-linux.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-x86-linux.a) |
-            | Linux | aarch64 (ARM64) | [libzon-aarch64-linux.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-aarch64-linux.a) |
-            | macOS | x86_64 (Intel) | [libzon-x86_64-macos.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-x86_64-macos.a) |
-            | macOS | aarch64 (Apple Silicon) | [libzon-aarch64-macos.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-aarch64-macos.a) |
-            | Bare Metal | x86_64 | [libzon-x86_64-freestanding.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-x86_64-freestanding.a) |
-            | Bare Metal | x86 | [libzon-x86-freestanding.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-x86-freestanding.a) |
-            | Bare Metal | aarch64 | [libzon-aarch64-freestanding.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-aarch64-freestanding.a) |
-            | Bare Metal | RISC-V 64 | [libzon-riscv64-freestanding.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-riscv64-freestanding.a) |
-            | Bare Metal | ARM | [libzon-arm-freestanding.a](https://github.com/muhammad-fiaz/zon.zig/releases/download/${{ github.event.release.tag_name }}/libzon-arm-freestanding.a) |
+            | Windows | x86_64 | [zon-x86_64-windows.lib](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/zon-x86_64-windows.lib) |
+            | Windows | x86 | [zon-x86-windows.lib](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/zon-x86-windows.lib) |
+            | Linux | x86_64 | [libzon-x86_64-linux.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-x86_64-linux.a) |
+            | Linux | x86 | [libzon-x86-linux.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-x86-linux.a) |
+            | Linux | aarch64 (ARM64) | [libzon-aarch64-linux.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-aarch64-linux.a) |
+            | macOS | x86_64 (Intel) | [libzon-x86_64-macos.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-x86_64-macos.a) |
+            | macOS | aarch64 (Apple Silicon) | [libzon-aarch64-macos.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-aarch64-macos.a) |
+            | Bare Metal | x86_64 | [libzon-x86_64-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-x86_64-freestanding.a) |
+            | Bare Metal | x86 | [libzon-x86-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-x86-freestanding.a) |
+            | Bare Metal | aarch64 | [libzon-aarch64-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-aarch64-freestanding.a) |
+            | Bare Metal | RISC-V 64 | [libzon-riscv64-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-riscv64-freestanding.a) |
+            | Bare Metal | ARM | [libzon-arm-freestanding.a](https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/libzon-arm-freestanding.a) |
 
             ### 🛠️ Using Prebuilt Libraries
 

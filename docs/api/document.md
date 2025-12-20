@@ -29,33 +29,36 @@ defer doc.deinit();
 
 All getters return `null` for missing paths or type mismatches.
 
-| Method            | Return Type     | Description            |
-| ----------------- | --------------- | ---------------------- |
-| `getString(path)` | `?[]const u8`   | Get string value       |
-| `getBool(path)`   | `?bool`         | Get boolean value      |
-| `getInt(path)`    | `?i64`          | Get integer value      |
-| `getFloat(path)`  | `?f64`          | Get float value        |
-| `getNumber(path)` | `?f64`          | Alias for getFloat     |
-| `getValue(path)`  | `?*const Value` | Get raw Value          |
-| `isNull(path)`    | `bool`          | Check if value is null |
-| `exists(path)`    | `bool`          | Check if path exists   |
-| `getType(path)`   | `?[]const u8`   | Get type name          |
+| Method                | Return Type     | Description                  |
+| --------------------- | --------------- | ---------------------------- |
+| `getString(path)`     | `?[]const u8`   | Get string value             |
+| `getIdentifier(path)` | `?[]const u8`   | Get identifier value         |
+| `getBool(path)`       | `?bool`         | Get boolean value            |
+| `getInt(path)`        | `?i64`          | Get integer value            |
+| `getFloat(path)`      | `?f64`          | Get float value              |
+| `getNumber(path)`     | `?f64`          | Alias for getFloat           |
+| `getValue(path)`      | `?*const Value` | Get raw Value                |
+| `isNull(path)`        | `bool`          | Check if value is null       |
+| `isIdentifier(path)`  | `bool`          | Check if value is identifier |
+| `exists(path)`        | `bool`          | Check if path exists         |
+| `getType(path)`       | `?[]const u8`   | Get type name                |
 
 ## Setters
 
 All setters auto-create intermediate objects.
 
-| Method                   | Description         |
-| ------------------------ | ------------------- |
-| `setString(path, value)` | Set string value    |
-| `setBool(path, value)`   | Set boolean value   |
-| `setInt(path, value)`    | Set integer value   |
-| `setFloat(path, value)`  | Set float value     |
-| `setNumber(path, value)` | Alias for setFloat  |
-| `setNull(path)`          | Set value to null   |
-| `setObject(path)`        | Create empty object |
-| `setArray(path)`         | Create empty array  |
-| `setValue(path, value)`  | Set raw Value       |
+| Method                       | Description               |
+| ---------------------------- | ------------------------- |
+| `setString(path, value)`     | Set string value          |
+| `setIdentifier(path, value)` | Set identifier (`.value`) |
+| `setBool(path, value)`       | Set boolean value         |
+| `setInt(path, value)`        | Set integer value         |
+| `setFloat(path, value)`      | Set float value           |
+| `setNumber(path, value)`     | Alias for setFloat        |
+| `setNull(path)`              | Set value to null         |
+| `setObject(path)`            | Create empty object       |
+| `setArray(path)`             | Create empty array        |
+| `setValue(path, value)`      | Set raw Value             |
 
 ## Modification
 

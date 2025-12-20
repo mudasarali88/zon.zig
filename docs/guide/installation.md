@@ -1,63 +1,44 @@
 # Installation
 
-This guide covers all methods for installing zon.zig in your Zig project.
+## Package Manager
 
-## Supported Platforms
+### Step 1: Add Dependency
 
-zon.zig supports a wide range of platforms:
+Add to your `build.zig.zon`:
 
-| Platform         | 32-bit               | 64-bit                      | ARM        |
-| ---------------- | -------------------- | --------------------------- | ---------- |
-| **Windows**      | ✅ x86               | ✅ x86_64                   | -          |
-| **Linux**        | ✅ x86               | ✅ x86_64                   | ✅ aarch64 |
-| **macOS**        | ✅ x86               | ✅ x86_64                   | ✅ aarch64 |
-| **Freestanding** | ✅ x86, arm, riscv32 | ✅ x86_64, aarch64, riscv64 | ✅         |
+```zig
+.{
+    .name = .your_project,
+    .version = "0.1.0",
+    .dependencies = .{
+        .zon = .{
+            .url = "https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz",
+            .hash = "...",
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}
+```
 
-## Method 1: Zig Fetch (Recommended)
+### Step 2: Fetch Hash
 
-The simplest way to add zon.zig:
+Run this command to get the hash:
 
 ```bash
 zig fetch --save https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz
 ```
 
-This command:
+or
 
-1. Downloads the package
-2. Calculates the hash
-3. Updates your `build.zig.zon` automatically
-
-## Method 2: Manual Configuration
-
-Add the dependency to your `build.zig.zon`:
-
-```zig
-.{
-    .name = .my_project,
-    .version = "0.1.0",
-    .dependencies = .{
-        .zon = .{
-            .url = "https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz",
-            .hash = "...", // Get hash from zig fetch
-        },
-    },
-    .paths = .{
-        "build.zig",
-        "build.zig.zon",
-        "src",
-    },
-}
-```
-
-To get the hash:
+for nightly installation, use this command:
 
 ```bash
-zig fetch https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz
+zig fetch --save git+https://github.com/muhammad-fiaz/zon.zig.git
 ```
 
-## Configure build.zig
+This automatically updates your `build.zig.zon` with the correct hash.
 
-After adding the dependency, update your `build.zig`:
+### Step 3: Update build.zig
 
 ```zig
 const std = @import("std");
@@ -74,24 +55,27 @@ pub fn build(b: *std.Build) void {
 
     // Create executable
     const exe = b.addExecutable(.{
-        .name = "my_app",
+        .name = "myapp",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                .{ .name = "zon", .module = zon_dep.module("zon") },
-            },
         }),
     });
 
+    // Import zon module
+    exe.root_module.addImport("zon", zon_dep.module("zon"));
+
     b.installArtifact(exe);
+
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+    const run_step = b.step("run", "Run the application");
+    run_step.dependOn(&run_cmd.step);
 }
 ```
 
-## Verify Installation
-
-Create a simple test file:
+### Step 4: Use in Code
 
 ```zig
 const std = @import("std");
@@ -100,29 +84,111 @@ const zon = @import("zon");
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    // Disable update checking for test
     zon.disableUpdateCheck();
 
-    var doc = zon.create(gpa.allocator());
+    var doc = zon.create(allocator);
     defer doc.deinit();
 
-    try doc.setString("test", "hello");
-    std.debug.print("zon.zig v{s} is working!\n", .{zon.version});
+    try doc.setString("hello", "world");
+
+    const output = try doc.toString();
+    defer allocator.free(output);
+    std.debug.print("{s}\n", .{output});
 }
 ```
 
-Build and run:
+### Step 5: Build and Run
 
 ```bash
 zig build run
 ```
 
+**Output:**
+
+```zig
+.{
+    .hello = "world",
+}
+```
+
+## Manual Installation
+
+### Clone Repository
+
+```bash
+git clone https://github.com/muhammad-fiaz/zon.zig.git
+```
+
+### Add as Local Dependency
+
+In your `build.zig.zon`:
+
+```zig
+.dependencies = .{
+    .zon = .{
+        .path = "../zon.zig",
+    },
+},
+```
+
+## Prebuilt Libraries
+
+Download prebuilt static libraries from [GitHub Releases](https://github.com/muhammad-fiaz/zon.zig/releases).
+
+| Platform | Architecture | File                     |
+| -------- | ------------ | ------------------------ |
+| Windows  | x86_64       | `zon-x86_64-windows.lib` |
+| Windows  | x86          | `zon-x86-windows.lib`    |
+| Linux    | x86_64       | `libzon-x86_64-linux.a`  |
+| Linux    | aarch64      | `libzon-aarch64-linux.a` |
+| macOS    | x86_64       | `libzon-x86_64-macos.a`  |
+| macOS    | aarch64      | `libzon-aarch64-macos.a` |
+
+### Using Prebuilt Library
+
+```zig
+exe.addLibraryPath(b.path("libs"));
+exe.linkSystemLibrary("zon");
+```
+
+## Verify Installation
+
+Create `test.zig`:
+
+```zig
+const std = @import("std");
+const zon = @import("zon");
+
+pub fn main() !void {
+    std.debug.print("zon.zig version: {s}\n", .{zon.version});
+}
+```
+
+Run:
+
+```bash
+zig build run
+```
+
+**Output:**
+
+```
+zon.zig version: 0.0.1
+```
+
+## Requirements
+
+- **Zig 0.15.0** or later
+- No external dependencies
+- Cross-platform: Windows, Linux, macOS
+
 ## Troubleshooting
 
 ### Hash Mismatch
 
-If you get a hash mismatch error, regenerate the hash:
+If you get a hash mismatch error:
 
 ```bash
 zig fetch --save https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz
@@ -130,18 +196,18 @@ zig fetch --save https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0
 
 ### Module Not Found
 
-Ensure you've added the import to your `build.zig`:
+Ensure you've added the import in your `build.zig`:
 
 ```zig
-.imports = &.{
-    .{ .name = "zon", .module = zon_dep.module("zon") },
-},
+exe.root_module.addImport("zon", zon_dep.module("zon"));
 ```
 
-### Version Compatibility
+### Compiler Version
 
-zon.zig requires Zig 0.15.0 or later. Check your version:
+Check your Zig version:
 
 ```bash
 zig version
 ```
+
+Requires 0.15.0 or later.

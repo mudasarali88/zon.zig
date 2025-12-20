@@ -1,13 +1,8 @@
-//! Update Checker
-//!
-//! Provides optional background checking for library updates.
-//! Compares the current version against the latest GitHub release.
-//! This feature can be disabled via configuration.
+//! Update Checker - Optional background update checking.
 
 const std = @import("std");
 const version = @import("version.zig");
 
-/// Version comparison result.
 pub const VersionRelation = enum {
     local_newer,
     remote_newer,
@@ -15,7 +10,6 @@ pub const VersionRelation = enum {
     unknown,
 };
 
-/// Update check result.
 pub const UpdateInfo = struct {
     available: bool,
     current_version: []const u8,
@@ -28,35 +22,30 @@ pub const UpdateInfo = struct {
     }
 };
 
-/// Configuration for update checking.
 pub const UpdateConfig = struct {
-    /// Enable or disable update checking.
     enabled: bool = true,
-    /// Timeout for HTTP requests in milliseconds.
-    timeout_ms: u64 = 5000,
-    /// Custom user agent string.
+    timeout_ms: u64 = 3000,
     user_agent: []const u8 = "zon.zig-update-checker",
 };
 
-/// Global configuration (can be modified before first use).
 pub var config: UpdateConfig = .{};
 
-/// Disable update checking globally.
+var check_thread: ?std.Thread = null;
+var check_result: ?UpdateInfo = null;
+var result_mutex: std.Thread.Mutex = .{};
+
 pub fn disableUpdateCheck() void {
     config.enabled = false;
 }
 
-/// Enable update checking globally.
 pub fn enableUpdateCheck() void {
     config.enabled = true;
 }
 
-/// Check if update checking is enabled.
 pub fn isUpdateCheckEnabled() bool {
     return config.enabled;
 }
 
-/// Check for updates from GitHub.
 pub fn checkForUpdates(allocator: std.mem.Allocator) !UpdateInfo {
     if (!config.enabled) {
         return UpdateInfo{
@@ -70,20 +59,49 @@ pub fn checkForUpdates(allocator: std.mem.Allocator) !UpdateInfo {
     var http_client = std.http.Client{ .allocator = allocator };
     defer http_client.deinit();
 
-    const uri = try std.Uri.parse("https://api.github.com/repos/muhammad-fiaz/zon.zig/releases/latest");
+    const uri = std.Uri.parse("https://api.github.com/repos/muhammad-fiaz/zon.zig/releases/latest") catch {
+        return UpdateInfo{
+            .available = false,
+            .current_version = version.version,
+            .latest_version = null,
+            .download_url = null,
+        };
+    };
 
     var server_header_buffer: [16 * 1024]u8 = undefined;
-    var req = try http_client.open(.GET, uri, .{
+    var req = http_client.open(.GET, uri, .{
         .extra_headers = &.{
             .{ .name = "User-Agent", .value = config.user_agent },
             .{ .name = "Accept", .value = "application/vnd.github.v3+json" },
         },
         .server_header_buffer = &server_header_buffer,
-    });
+    }) catch {
+        return UpdateInfo{
+            .available = false,
+            .current_version = version.version,
+            .latest_version = null,
+            .download_url = null,
+        };
+    };
     defer req.deinit();
 
-    try req.send();
-    try req.wait();
+    req.send() catch {
+        return UpdateInfo{
+            .available = false,
+            .current_version = version.version,
+            .latest_version = null,
+            .download_url = null,
+        };
+    };
+
+    req.wait() catch {
+        return UpdateInfo{
+            .available = false,
+            .current_version = version.version,
+            .latest_version = null,
+            .download_url = null,
+        };
+    };
 
     if (req.status != .ok) {
         return UpdateInfo{
@@ -99,16 +117,23 @@ pub fn checkForUpdates(allocator: std.mem.Allocator) !UpdateInfo {
 
     var buf: [4096]u8 = undefined;
     while (true) {
-        const n = try req.reader().read(&buf);
+        const n = req.reader().read(&buf) catch break;
         if (n == 0) break;
-        try body_buffer.appendSlice(allocator, buf[0..n]);
-        if (body_buffer.items.len > 1 * 1024 * 1024) return error.StreamTooLong;
+        body_buffer.appendSlice(allocator, buf[0..n]) catch break;
+        if (body_buffer.items.len > 512 * 1024) break;
     }
 
-    const parsed = try std.json.parseFromSlice(struct {
+    const parsed = std.json.parseFromSlice(struct {
         tag_name: []const u8,
         html_url: []const u8,
-    }, allocator, body_buffer.items, .{ .ignore_unknown_fields = true });
+    }, allocator, body_buffer.items, .{ .ignore_unknown_fields = true }) catch {
+        return UpdateInfo{
+            .available = false,
+            .current_version = version.version,
+            .latest_version = null,
+            .download_url = null,
+        };
+    };
     defer parsed.deinit();
 
     const latest = parseVersionTag(parsed.value.tag_name);
@@ -117,55 +142,66 @@ pub fn checkForUpdates(allocator: std.mem.Allocator) !UpdateInfo {
     return UpdateInfo{
         .available = rel == .remote_newer,
         .current_version = version.version,
-        .latest_version = try allocator.dupe(u8, latest),
-        .download_url = try allocator.dupe(u8, parsed.value.html_url),
+        .latest_version = allocator.dupe(u8, latest) catch null,
+        .download_url = allocator.dupe(u8, parsed.value.html_url) catch null,
     };
 }
 
-/// Check for updates and print notification if available.
+fn backgroundCheck(allocator: std.mem.Allocator) void {
+    const info = checkForUpdates(allocator) catch return;
+
+    result_mutex.lock();
+    defer result_mutex.unlock();
+    check_result = info;
+}
+
+pub fn startBackgroundCheck(allocator: std.mem.Allocator) void {
+    if (!config.enabled) return;
+    if (check_thread != null) return;
+
+    check_thread = std.Thread.spawn(.{}, backgroundCheck, .{allocator}) catch null;
+}
+
 pub fn checkAndNotify(allocator: std.mem.Allocator) void {
     if (!config.enabled) return;
 
-    const info = checkForUpdates(allocator) catch return;
-    defer {
-        var mutable_info = info;
-        mutable_info.deinit(allocator);
-    }
+    result_mutex.lock();
+    const info = check_result;
+    result_mutex.unlock();
 
-    if (info.available) {
-        if (info.latest_version) |latest| {
-            std.debug.print(
-                "\n[zon.zig] Update available: {s} -> {s}\n" ++
-                    "Download: https://github.com/muhammad-fiaz/zon.zig/releases/latest\n\n",
-                .{ info.current_version, latest },
-            );
+    if (info) |i| {
+        if (i.available) {
+            if (i.latest_version) |latest| {
+                std.debug.print(
+                    "\n[zon.zig] Update available: {s} -> {s}\n" ++
+                        "Download: https://github.com/muhammad-fiaz/zon.zig/releases/latest\n\n",
+                    .{ i.current_version, latest },
+                );
+            }
         }
+    } else {
+        startBackgroundCheck(allocator);
     }
 }
 
-/// Compare a version string against the current library version.
 pub fn compareVersions(remote_version: []const u8) VersionRelation {
     const local = version.semanticVersion();
     const remote = std.SemanticVersion.parse(remote_version) catch return .unknown;
 
     if (local.major > remote.major) return .local_newer;
     if (local.major < remote.major) return .remote_newer;
-
     if (local.minor > remote.minor) return .local_newer;
     if (local.minor < remote.minor) return .remote_newer;
-
     if (local.patch > remote.patch) return .local_newer;
     if (local.patch < remote.patch) return .remote_newer;
 
     return .equal;
 }
 
-/// Get the current library version.
 pub fn getCurrentVersion() []const u8 {
     return version.version;
 }
 
-/// Parse a version tag (e.g., "v1.2.3") to version string.
 pub fn parseVersionTag(tag: []const u8) []const u8 {
     if (tag.len > 0 and tag[0] == 'v') {
         return tag[1..];
@@ -173,7 +209,6 @@ pub fn parseVersionTag(tag: []const u8) []const u8 {
     return tag;
 }
 
-/// Format update notification message.
 pub fn formatUpdateMessage(
     allocator: std.mem.Allocator,
     current: []const u8,

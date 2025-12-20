@@ -1,135 +1,318 @@
 # Basic Usage
 
-This guide covers the core operations in zon.zig.
+Core operations for working with ZON documents.
 
 ## Creating a Document
 
-Create a new, empty ZON document:
-
 ```zig
+const std = @import("std");
 const zon = @import("zon");
 
-var doc = zon.create(allocator);
-defer doc.deinit();
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    zon.disableUpdateCheck();
+
+    var doc = zon.create(allocator);
+    defer doc.deinit(); // Always clean up
+}
 ```
 
 ## Setting Values
 
-### Basic Types
+### String Values
 
 ```zig
 try doc.setString("name", "myapp");
-try doc.setBool("private", true);
+try doc.setString("version", "1.0.0");
+```
+
+**Output:**
+
+```zig
+.{
+    .name = "myapp",
+    .version = "1.0.0",
+}
+```
+
+### Identifier Values
+
+Use `setIdentifier` for `.name = .value` syntax:
+
+```zig
+try doc.setIdentifier("name", "my_package");
+```
+
+**Output:**
+
+```zig
+.{
+    .name = .my_package,
+}
+```
+
+### Boolean Values
+
+```zig
+try doc.setBool("enabled", true);
+try doc.setBool("debug", false);
+```
+
+**Output:**
+
+```zig
+.{
+    .debug = false,
+    .enabled = true,
+}
+```
+
+### Integer Values
+
+```zig
 try doc.setInt("port", 8080);
-try doc.setFloat("timeout", 30.5);
-try doc.setNull("optional_field");
+try doc.setInt("max_connections", 100);
+
+// Large hex values
+const fingerprint: u64 = 0xaabbccdd11223344;
+try doc.setInt("fingerprint", @bitCast(fingerprint));
 ```
 
-### Nested Paths
-
-Use dot notation to set nested values. Intermediate objects are created automatically:
+**Output:**
 
 ```zig
-// Creates: .{ .config = .{ .server = .{ .host = "localhost" } } }
-try doc.setString("config.server.host", "localhost");
-try doc.setInt("config.server.port", 8080);
+.{
+    .fingerprint = -6144092016769617084,
+    .max_connections = 100,
+    .port = 8080,
+}
 ```
 
-### Objects and Arrays
+### Float Values
 
 ```zig
-// Create empty object
-try doc.setObject("metadata");
+try doc.setFloat("pi", 3.14159);
+try doc.setFloat("rate", 0.05);
+```
 
-// Create empty array
-try doc.setArray("tags");
+**Output:**
+
+```zig
+.{
+    .pi = 3.14159,
+    .rate = 0.05,
+}
+```
+
+### Null Values
+
+```zig
+try doc.setNull("password");
+```
+
+**Output:**
+
+```zig
+.{
+    .password = null,
+}
 ```
 
 ## Getting Values
 
-All getters return optional values - `null` for missing paths or type mismatches:
+All getters return `null` for missing paths or type mismatches.
+
+### String Values
 
 ```zig
-const name = doc.getString("name");           // ?[]const u8
-const port = doc.getInt("port");              // ?i64
-const timeout = doc.getFloat("timeout");      // ?f64
-const private = doc.getBool("private");       // ?bool
+const name = doc.getString("name");
 
-// Use with orelse for defaults
-const host = doc.getString("host") orelse "localhost";
-const max_conn = doc.getInt("max_connections") orelse 100;
+if (name) |n| {
+    std.debug.print("Name: {s}\n", .{n});
+} else {
+    std.debug.print("Name not found\n", .{});
+}
+
+// With default
+const version = doc.getString("version") orelse "0.0.0";
 ```
 
-### Check Value Properties
+### Identifier Values
 
 ```zig
-// Check if path exists
-if (doc.exists("config.port")) {
-    // Path exists
+// Get identifier specifically
+if (doc.getIdentifier("name")) |id| {
+    std.debug.print("Package: .{s}\n", .{id});
 }
 
-// Check if value is null
-if (doc.isNull("optional_field")) {
-    // Value is explicitly null
+// getString also works for identifiers
+if (doc.getString("name")) |s| {
+    std.debug.print("Name: {s}\n", .{s});
 }
 
-// Get value type
-const type_name = doc.getType("name"); // "string", "int", "bool", etc.
+// Check if it's an identifier
+if (doc.isIdentifier("name")) {
+    std.debug.print("It's an identifier\n", .{});
+}
 ```
 
-## Deleting Values
+### Boolean Values
 
 ```zig
-// Delete a key - returns true if existed
-const deleted = doc.delete("private");
-if (deleted) {
-    std.debug.print("Key was deleted\n", .{});
-}
+const enabled = doc.getBool("enabled") orelse false;
 
-// Clear all data
+if (enabled) {
+    std.debug.print("Feature is enabled\n", .{});
+}
+```
+
+### Integer Values
+
+```zig
+const port = doc.getInt("port") orelse 8080;
+std.debug.print("Port: {d}\n", .{port});
+
+// Large hex values
+if (doc.getInt("fingerprint")) |fp| {
+    const unsigned: u64 = @bitCast(fp);
+    std.debug.print("Fingerprint: 0x{x}\n", .{unsigned});
+}
+```
+
+### Float Values
+
+```zig
+const rate = doc.getFloat("rate") orelse 0.0;
+std.debug.print("Rate: {d}\n", .{rate});
+```
+
+## Checking Values
+
+### Check if Path Exists
+
+```zig
+if (doc.exists("database.host")) {
+    std.debug.print("Database host is configured\n", .{});
+}
+```
+
+### Check if Null
+
+```zig
+if (doc.isNull("password")) {
+    std.debug.print("Password is null\n", .{});
+}
+```
+
+### Get Type Name
+
+```zig
+if (doc.getType("port")) |t| {
+    std.debug.print("Type: {s}\n", .{t}); // "int"
+}
+```
+
+Possible types:
+
+- `"null"`
+- `"bool"`
+- `"int"`
+- `"float"`
+- `"string"`
+- `"identifier"`
+- `"object"`
+- `"array"`
+
+### Check if Empty
+
+```zig
+if (doc.isEmpty()) {
+    std.debug.print("Document is empty\n", .{});
+}
+```
+
+## Modifying Values
+
+### Delete a Key
+
+```zig
+if (doc.delete("old_key")) {
+    std.debug.print("Deleted successfully\n", .{});
+} else {
+    std.debug.print("Key didn't exist\n", .{});
+}
+```
+
+### Clear All Data
+
+```zig
 doc.clear();
 ```
 
-## Document Information
+### Get Key Count
 
 ```zig
-// Count root keys
-const key_count = doc.count();
+const count = doc.count();
+std.debug.print("Root keys: {d}\n", .{count});
+```
 
-// Get all root keys
-const all_keys = try doc.keys();
-defer allocator.free(all_keys);
-for (all_keys) |key| {
+### Get All Keys
+
+```zig
+const keys = try doc.keys();
+defer allocator.free(keys);
+
+for (keys) |key| {
     std.debug.print("Key: {s}\n", .{key});
 }
 ```
 
-## Saving
+## Output
 
-### Save to File
+### To String
 
 ```zig
-// Save to a new file
-try doc.saveAs("config.zon");
+// Default (4-space indent)
+const output = try doc.toString();
+defer allocator.free(output);
+std.debug.print("{s}\n", .{output});
+```
 
-// Save to original file (only works if opened with zon.open)
+### Pretty Print (Custom Indent)
+
+```zig
+// 2-space indent
+const two_space = try doc.toPrettyString(2);
+defer allocator.free(two_space);
+
+// 8-space indent
+const eight_space = try doc.toPrettyString(8);
+defer allocator.free(eight_space);
+```
+
+### Compact (No Indent)
+
+```zig
+const compact = try doc.toCompactString();
+defer allocator.free(compact);
+```
+
+## Saving
+
+### Save to Original Path
+
+```zig
+// Only works if opened from file
 try doc.save();
 ```
 
-### Get as String
+### Save to New Path
 
 ```zig
-// Default formatting (4-space indent)
-const output = try doc.toString();
-defer allocator.free(output);
-
-// Custom indentation
-const pretty = try doc.toPrettyString(2);
-defer allocator.free(pretty);
-
-// Compact (minimal whitespace)
-const compact = try doc.toCompactString();
-defer allocator.free(compact);
+try doc.saveAs("config.zon");
 ```
 
 ## Complete Example
@@ -149,43 +332,45 @@ pub fn main() !void {
     var doc = zon.create(allocator);
     defer doc.deinit();
 
-    // Set values
-    try doc.setString("name", "myapp");
+    // Set various types
+    try doc.setIdentifier("name", "my_app");
     try doc.setString("version", "1.0.0");
-    try doc.setBool("private", true);
     try doc.setInt("port", 8080);
-
-    // Set nested values
-    try doc.setString("database.host", "localhost");
-    try doc.setInt("database.port", 5432);
-    try doc.setString("database.name", "myapp");
+    try doc.setBool("debug", true);
+    try doc.setFloat("rate", 0.05);
+    try doc.setNull("password");
 
     // Read values
-    std.debug.print("App: {s} v{s}\n", .{
-        doc.getString("name").?,
-        doc.getString("version").?
-    });
-    std.debug.print("Database: {s}:{d}/{s}\n", .{
-        doc.getString("database.host").?,
-        doc.getInt("database.port").?,
-        doc.getString("database.name").?
-    });
+    std.debug.print("Name: .{s}\n", .{doc.getIdentifier("name").?});
+    std.debug.print("Port: {d}\n", .{doc.getInt("port").?});
+    std.debug.print("Debug: {}\n", .{doc.getBool("debug").?});
 
-    // Check existence
-    if (doc.exists("private")) {
-        std.debug.print("Private: {}\n", .{doc.getBool("private").?});
-    }
+    // Check types
+    std.debug.print("Type of 'name': {s}\n", .{doc.getType("name").?});
+    std.debug.print("Type of 'port': {s}\n", .{doc.getType("port").?});
 
-    // Delete and verify
-    _ = doc.delete("private");
-    std.debug.print("Private after delete: {?}\n", .{doc.getBool("private")});
-
-    // Get output
+    // Output
     const output = try doc.toString();
     defer allocator.free(output);
-    std.debug.print("\nGenerated ZON:\n{s}\n", .{output});
+    std.debug.print("\n{s}\n", .{output});
+}
+```
 
-    // Save
-    try doc.saveAs("config.zon");
+**Output:**
+
+```
+Name: .my_app
+Port: 8080
+Debug: true
+Type of 'name': identifier
+Type of 'port': int
+
+.{
+    .debug = true,
+    .name = .my_app,
+    .password = null,
+    .port = 8080,
+    .rate = 0.05,
+    .version = "1.0.0",
 }
 ```

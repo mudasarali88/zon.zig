@@ -84,6 +84,18 @@ pub const Document = struct {
         return self.getFloat(path);
     }
 
+    /// Returns the identifier value at the given path.
+    pub fn getIdentifier(self: *const Document, path: []const u8) ?[]const u8 {
+        const val = self.getValueByPath(path) orelse return null;
+        return val.asIdentifier();
+    }
+
+    /// Returns true if the value at the path is an identifier.
+    pub fn isIdentifier(self: *const Document, path: []const u8) bool {
+        const val = self.getValueByPath(path) orelse return false;
+        return val.isIdentifier();
+    }
+
     /// Returns true if the value at the path is null.
     pub fn isNull(self: *const Document, path: []const u8) bool {
         const val = self.getValueByPath(path) orelse return false;
@@ -106,6 +118,7 @@ pub const Document = struct {
                 .float => "float",
             },
             .string => "string",
+            .identifier => "identifier",
             .object => "object",
             .array => "array",
         };
@@ -121,6 +134,13 @@ pub const Document = struct {
         const owned = try self.allocator.dupe(u8, value);
         errdefer self.allocator.free(owned);
         try self.setValueByPath(path, .{ .string = owned });
+    }
+
+    /// Sets an identifier value at the given path. Outputs as `.name = .value`.
+    pub fn setIdentifier(self: *Document, path: []const u8, value: []const u8) !void {
+        const owned = try self.allocator.dupe(u8, value);
+        errdefer self.allocator.free(owned);
+        try self.setValueByPath(path, .{ .identifier = owned });
     }
 
     /// Sets a boolean value at the given path.
@@ -707,3 +727,196 @@ pub const Document = struct {
         return replaced;
     }
 };
+
+test "Document: create empty" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try std.testing.expect(doc.isEmpty());
+    try std.testing.expectEqual(@as(usize, 0), doc.count());
+}
+
+test "Document: set and get string" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("name", "myapp");
+    try std.testing.expectEqualStrings("myapp", doc.getString("name").?);
+    try std.testing.expect(doc.getBool("name") == null);
+}
+
+test "Document: set and get identifier" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setIdentifier("name", "my_package");
+    try std.testing.expectEqualStrings("my_package", doc.getIdentifier("name").?);
+    try std.testing.expect(doc.isIdentifier("name"));
+    try std.testing.expectEqualStrings("identifier", doc.getType("name").?);
+}
+
+test "Document: set and get bool" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setBool("enabled", true);
+    try std.testing.expectEqual(true, doc.getBool("enabled").?);
+}
+
+test "Document: set and get int" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setInt("port", 8080);
+    try std.testing.expectEqual(@as(i64, 8080), doc.getInt("port").?);
+}
+
+test "Document: set and get float" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setFloat("score", 3.14);
+    try std.testing.expectApproxEqAbs(@as(f64, 3.14), doc.getFloat("score").?, 0.001);
+}
+
+test "Document: nested paths" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("server.host", "localhost");
+    try doc.setInt("server.port", 8080);
+    try doc.setBool("server.ssl.enabled", true);
+
+    try std.testing.expectEqualStrings("localhost", doc.getString("server.host").?);
+    try std.testing.expectEqual(@as(i64, 8080), doc.getInt("server.port").?);
+    try std.testing.expectEqual(true, doc.getBool("server.ssl.enabled").?);
+}
+
+test "Document: delete" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("name", "test");
+    try std.testing.expect(doc.exists("name"));
+    try std.testing.expect(doc.delete("name"));
+    try std.testing.expect(!doc.exists("name"));
+    try std.testing.expect(!doc.delete("nonexistent"));
+}
+
+test "Document: clear" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("a", "1");
+    try doc.setString("b", "2");
+    try std.testing.expectEqual(@as(usize, 2), doc.count());
+
+    doc.clear();
+    try std.testing.expect(doc.isEmpty());
+}
+
+test "Document: array operations" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setArray("paths");
+    try doc.appendToArray("paths", "src");
+    try doc.appendToArray("paths", "lib");
+
+    try std.testing.expectEqual(@as(usize, 2), doc.arrayLen("paths").?);
+    try std.testing.expectEqualStrings("src", doc.getArrayString("paths", 0).?);
+    try std.testing.expectEqualStrings("lib", doc.getArrayString("paths", 1).?);
+}
+
+test "Document: find and replace" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("a", "hello");
+    try doc.setString("b", "hello");
+    try doc.setString("c", "world");
+
+    const count_val = try doc.replaceAll("hello", "goodbye");
+    try std.testing.expectEqual(@as(usize, 2), count_val);
+    try std.testing.expectEqualStrings("goodbye", doc.getString("a").?);
+    try std.testing.expectEqualStrings("world", doc.getString("c").?);
+}
+
+test "Document: clone" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("name", "original");
+    var cloned = try doc.clone();
+    defer cloned.deinit();
+
+    try doc.setString("name", "modified");
+    try std.testing.expectEqualStrings("original", cloned.getString("name").?);
+}
+
+test "Document: type checking" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("str", "hello");
+    try doc.setInt("int", 42);
+    try doc.setBool("bool", true);
+    try doc.setNull("null");
+
+    try std.testing.expectEqualStrings("string", doc.getType("str").?);
+    try std.testing.expectEqualStrings("int", doc.getType("int").?);
+    try std.testing.expectEqualStrings("bool", doc.getType("bool").?);
+    try std.testing.expectEqualStrings("null", doc.getType("null").?);
+    try std.testing.expect(doc.isNull("null"));
+}
+
+test "Document: exists" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("name", "test");
+    try std.testing.expect(doc.exists("name"));
+    try std.testing.expect(!doc.exists("nonexistent"));
+}
+
+test "Document: keys" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("a", "1");
+    try doc.setString("b", "2");
+
+    const k = try doc.keys();
+    defer allocator.free(k);
+
+    try std.testing.expectEqual(@as(usize, 2), k.len);
+}
+
+test "Document: toString" {
+    const allocator = std.testing.allocator;
+    var doc = Document.initEmpty(allocator);
+    defer doc.deinit();
+
+    try doc.setString("name", "test");
+
+    const output = try doc.toString();
+    defer allocator.free(output);
+
+    try std.testing.expect(std.mem.indexOf(u8, output, ".name") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "\"test\"") != null);
+}

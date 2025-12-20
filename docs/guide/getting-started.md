@@ -1,21 +1,31 @@
 # Getting Started
 
-This guide will help you get started with zon.zig in just a few minutes.
+Learn how to install and use zon.zig in your Zig project.
 
-## Prerequisites
+## Requirements
 
-- Zig 0.15.0 or later
-- A Zig project with `build.zig` and `build.zig.zon`
+- **Zig 0.15.0** or later
 
 ## Installation
 
-The easiest way to add zon.zig to your project:
+### Using Zig Package Manager
+
+Add zon.zig as a dependency in your `build.zig.zon`:
+
+```zig
+.dependencies = .{
+    .zon = .{
+        .url = "https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz",
+        .hash = "...", // Will be provided by `zig fetch`
+    },
+},
+```
+
+Or use the `zig fetch` command:
 
 ```bash
 zig fetch --save https://github.com/muhammad-fiaz/zon.zig/archive/refs/tags/v0.0.1.tar.gz
 ```
-
-This automatically adds the dependency to your `build.zig.zon`.
 
 Then update your `build.zig`:
 
@@ -27,76 +37,171 @@ const zon_dep = b.dependency("zon", .{
 exe.root_module.addImport("zon", zon_dep.module("zon"));
 ```
 
-## Your First ZON Document
+## Quick Start
 
-Here's a complete example that creates, modifies, and saves a ZON file:
+### Create and Save a Document
 
 ```zig
 const std = @import("std");
 const zon = @import("zon");
 
 pub fn main() !void {
-    // Setup allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Optional: Disable update checking
+    // Disable update checking (optional)
     zon.disableUpdateCheck();
 
     // Create a new document
     var doc = zon.create(allocator);
     defer doc.deinit();
 
-    // Set some values
+    // Set values
     try doc.setString("name", "myapp");
     try doc.setString("version", "1.0.0");
-    try doc.setBool("private", true);
     try doc.setInt("port", 8080);
+    try doc.setBool("debug", true);
 
-    // Set nested values (creates intermediate objects automatically)
-    try doc.setString("dependencies.http.path", "../http");
-    try doc.setString("dependencies.http.version", "0.1.0");
-
-    // Read values back
-    if (doc.getString("name")) |name| {
-        std.debug.print("Name: {s}\n", .{name});
-    }
-
-    if (doc.getInt("port")) |port| {
-        std.debug.print("Port: {d}\n", .{port});
-    }
+    // Set nested values (auto-creates intermediate objects)
+    try doc.setString("database.host", "localhost");
+    try doc.setInt("database.port", 5432);
 
     // Save to file
     try doc.saveAs("config.zon");
-    std.debug.print("Saved to config.zon\n", .{});
 }
 ```
 
-## Opening Existing Files
-
-To read an existing ZON file:
+**Output (`config.zon`):**
 
 ```zig
-var doc = try zon.open(allocator, "build.zig.zon");
+.{
+    .database = .{
+        .host = "localhost",
+        .port = 5432,
+    },
+    .debug = true,
+    .name = "myapp",
+    .port = 8080,
+    .version = "1.0.0",
+}
+```
+
+### Open and Read a Document
+
+```zig
+const std = @import("std");
+const zon = @import("zon");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    zon.disableUpdateCheck();
+
+    // Open existing file
+    var doc = try zon.open(allocator, "config.zon");
+    defer doc.deinit();
+
+    // Read values
+    const name = doc.getString("name") orelse "unknown";
+    const port = doc.getInt("port") orelse 8080;
+    const debug = doc.getBool("debug") orelse false;
+
+    std.debug.print("App: {s}\n", .{name});
+    std.debug.print("Port: {d}\n", .{port});
+    std.debug.print("Debug: {}\n", .{debug});
+
+    // Read nested values
+    if (doc.getString("database.host")) |host| {
+        std.debug.print("DB Host: {s}\n", .{host});
+    }
+}
+```
+
+**Output:**
+
+```
+App: myapp
+Port: 8080
+Debug: true
+DB Host: localhost
+```
+
+### Parse from String
+
+```zig
+const source =
+    \\.{
+    \\    .name = "myapp",
+    \\    .version = "1.0.0",
+    \\}
+;
+
+var doc = try zon.parse(allocator, source);
 defer doc.deinit();
 
-const name = doc.getString("name");
-const version = doc.getString("version");
+std.debug.print("Name: {s}\n", .{doc.getString("name").?});
 ```
 
-## Update Checker
+### Working with Identifier Values
 
-zon.zig includes an optional update checker. To disable it:
+ZON supports identifier values like `.name = .my_package`:
 
 ```zig
-// Call before other operations
-zon.disableUpdateCheck();
+// Set identifier (outputs as .name = .my_package)
+try doc.setIdentifier("name", "my_package");
+
+// Read identifier
+if (doc.getIdentifier("name")) |id| {
+    std.debug.print("Package: .{s}\n", .{id});
+}
+
+// Check if value is an identifier
+if (doc.isIdentifier("name")) {
+    std.debug.print("name is an identifier\n", .{});
+}
 ```
+
+### Working with Arrays
+
+```zig
+// Create array
+try doc.setArray("paths");
+
+// Append items
+try doc.appendToArray("paths", "build.zig");
+try doc.appendToArray("paths", "src");
+
+// Read array
+const len = doc.arrayLen("paths").?;
+std.debug.print("Paths: {d} items\n", .{len});
+
+var i: usize = 0;
+while (doc.getArrayString("paths", i)) |path| : (i += 1) {
+    std.debug.print("  - {s}\n", .{path});
+}
+```
+
+## API Overview
+
+| Function                       | Description                  |
+| ------------------------------ | ---------------------------- |
+| `zon.create(allocator)`        | Create empty document        |
+| `zon.open(allocator, path)`    | Open file                    |
+| `zon.parse(allocator, source)` | Parse string                 |
+| `zon.fileExists(path)`         | Check if file exists         |
+| `zon.copyFile(src, dst)`       | Copy file                    |
+| `zon.deleteFile(path)`         | Delete file                  |
+| `zon.renameFile(old, new)`     | Rename file                  |
+| `zon.disableUpdateCheck()`     | Disable update notifications |
+| `zon.version`                  | Library version string       |
 
 ## Next Steps
 
-- [Basic Usage](/guide/basic-usage) - Learn the core API
-- [Reading Files](/guide/reading) - Read and parse ZON files
-- [Writing Files](/guide/writing) - Create and save ZON files
-- [API Reference](/api/) - Complete API documentation
+- [Basic Usage](./basic-usage.md) - Core operations
+- [Reading Files](./reading.md) - File reading in depth
+- [Writing Files](./writing.md) - File writing in depth
+- [Identifier Values](./identifier-values.md) - `.name = .value` syntax
+- [API Reference](../api/) - Complete API documentation

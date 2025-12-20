@@ -15,6 +15,7 @@ zig build run-merge_clone
 zig build run-config_management
 zig build run-error_handling
 zig build run-nested_creation
+zig build run-identifier_values
 
 # Run all examples
 zig build run-all-examples
@@ -252,14 +253,15 @@ defer allocator.free(compact);
 
 ## Available Examples
 
-| Example             | Description          | Command                           |
-| ------------------- | -------------------- | --------------------------------- |
-| `basic`             | Core operations      | `zig build run-basic`             |
-| `package_manifest`  | build.zig.zon format | `zig build run-package_manifest`  |
-| `find_replace`      | Search and replace   | `zig build run-find_replace`      |
-| `arrays`            | Array operations     | `zig build run-arrays`            |
-| `pretty_print`      | Output formatting    | `zig build run-pretty_print`      |
-| `merge_clone`       | Document merging     | `zig build run-merge_clone`       |
-| `config_management` | Dev/prod configs     | `zig build run-config_management` |
-| `error_handling`    | Error handling       | `zig build run-error_handling`    |
-| `nested_creation`   | Deep nesting         | `zig build run-nested_creation`   |
+| Example             | Description           | Command                           |
+| ------------------- | --------------------- | --------------------------------- |
+| `basic`             | Core operations       | `zig build run-basic`             |
+| `package_manifest`  | build.zig.zon format  | `zig build run-package_manifest`  |
+| `find_replace`      | Search and replace    | `zig build run-find_replace`      |
+| `arrays`            | Array operations      | `zig build run-arrays`            |
+| `pretty_print`      | Output formatting     | `zig build run-pretty_print`      |
+| `merge_clone`       | Document merging      | `zig build run-merge_clone`       |
+| `config_management` | Dev/prod configs      | `zig build run-config_management` |
+| `error_handling`    | Error handling        | `zig build run-error_handling`    |
+| `nested_creation`   | Deep nesting          | `zig build run-nested_creation`   |
+| `identifier_values` | .name = .value syntax | `zig build run-identifier_values` |

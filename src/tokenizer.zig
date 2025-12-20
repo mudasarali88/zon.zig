@@ -312,9 +312,7 @@ pub const Tokenizer = struct {
     }
 };
 
-// ============================================================================
 // Character Classification Helpers
-// ============================================================================
 
 fn isDigit(c: u8) bool {
     return c >= '0' and c <= '9';
@@ -334,4 +332,102 @@ fn isBinaryDigit(c: u8) bool {
 
 fn isAlphaNumeric(c: u8) bool {
     return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_';
+}
+
+test "tokenize: dot" {
+    var tokenizer = Tokenizer.init(".");
+    const tok = tokenizer.next();
+    try std.testing.expectEqual(Token.Tag.dot, tok.tag);
+}
+
+test "tokenize: braces" {
+    var tokenizer = Tokenizer.init("{}");
+    try std.testing.expectEqual(Token.Tag.l_brace, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.r_brace, tokenizer.next().tag);
+}
+
+test "tokenize: brackets" {
+    var tokenizer = Tokenizer.init("[]");
+    try std.testing.expectEqual(Token.Tag.l_bracket, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.r_bracket, tokenizer.next().tag);
+}
+
+test "tokenize: comma" {
+    var tokenizer = Tokenizer.init(",");
+    try std.testing.expectEqual(Token.Tag.comma, tokenizer.next().tag);
+}
+
+test "tokenize: equals" {
+    var tokenizer = Tokenizer.init("=");
+    try std.testing.expectEqual(Token.Tag.equals, tokenizer.next().tag);
+}
+
+test "tokenize: identifier" {
+    var tokenizer = Tokenizer.init("hello_world");
+    const tok = tokenizer.next();
+    try std.testing.expectEqual(Token.Tag.identifier, tok.tag);
+    try std.testing.expectEqualStrings("hello_world", tokenizer.slice(tok));
+}
+
+test "tokenize: string literal" {
+    var tokenizer = Tokenizer.init("\"hello world\"");
+    const tok = tokenizer.next();
+    try std.testing.expectEqual(Token.Tag.string_literal, tok.tag);
+}
+
+test "tokenize: number literal" {
+    var tokenizer = Tokenizer.init("12345");
+    const tok = tokenizer.next();
+    try std.testing.expectEqual(Token.Tag.number_literal, tok.tag);
+    try std.testing.expectEqualStrings("12345", tokenizer.slice(tok));
+}
+
+test "tokenize: hex number" {
+    var tokenizer = Tokenizer.init("0xFF");
+    const tok = tokenizer.next();
+    try std.testing.expectEqual(Token.Tag.number_literal, tok.tag);
+    try std.testing.expectEqualStrings("0xFF", tokenizer.slice(tok));
+}
+
+test "tokenize: keyword true" {
+    var tokenizer = Tokenizer.init("true");
+    try std.testing.expectEqual(Token.Tag.keyword_true, tokenizer.next().tag);
+}
+
+test "tokenize: keyword false" {
+    var tokenizer = Tokenizer.init("false");
+    try std.testing.expectEqual(Token.Tag.keyword_false, tokenizer.next().tag);
+}
+
+test "tokenize: keyword null" {
+    var tokenizer = Tokenizer.init("null");
+    try std.testing.expectEqual(Token.Tag.keyword_null, tokenizer.next().tag);
+}
+
+test "tokenize: skip comment" {
+    var tokenizer = Tokenizer.init("// comment\n.{");
+    try std.testing.expectEqual(Token.Tag.dot, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.l_brace, tokenizer.next().tag);
+}
+
+test "tokenize: at sign" {
+    var tokenizer = Tokenizer.init("@");
+    try std.testing.expectEqual(Token.Tag.at_sign, tokenizer.next().tag);
+}
+
+test "tokenize: eof" {
+    var tokenizer = Tokenizer.init("");
+    try std.testing.expectEqual(Token.Tag.eof, tokenizer.next().tag);
+}
+
+test "tokenize: full object" {
+    var tokenizer = Tokenizer.init(".{ .name = \"test\" }");
+    try std.testing.expectEqual(Token.Tag.dot, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.l_brace, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.dot, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.identifier, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.equals, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.string_literal, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.r_brace, tokenizer.next().tag);
+    try std.testing.expectEqual(Token.Tag.eof, tokenizer.next().tag);
 }

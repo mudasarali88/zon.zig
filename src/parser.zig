@@ -109,7 +109,7 @@ pub const Parser = struct {
         } else if (self.current.tag == .identifier) {
             const name = try self.allocator.dupe(u8, self.tokenizer.slice(self.current));
             self.advance();
-            return .{ .string = name };
+            return .{ .identifier = name };
         }
 
         return error.UnexpectedToken;
@@ -481,4 +481,107 @@ test "parse octal number" {
     var obj = value.asObject().?;
     const val = obj.get("value").?;
     try std.testing.expectEqual(@as(i64, 493), val.asInt().?);
+}
+
+test "parse identifier value" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .name = .my_package }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    const val = obj.get("name").?;
+    try std.testing.expect(val.isIdentifier());
+    try std.testing.expectEqualStrings("my_package", val.asIdentifier().?);
+}
+
+test "parse nested object" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .server = .{ .host = \"localhost\", .port = 8080 } }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    const server = obj.get("server").?.asObject().?;
+    try std.testing.expectEqualStrings("localhost", server.get("host").?.asString().?);
+    try std.testing.expectEqual(@as(i64, 8080), server.get("port").?.asInt().?);
+}
+
+test "parse mixed array" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .items = .{ \"a\", \"b\", \"c\" } }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    const arr = obj.get("items").?.asArray().?;
+    try std.testing.expectEqual(@as(usize, 3), arr.len());
+    try std.testing.expectEqualStrings("a", arr.get(0).?.asString().?);
+}
+
+test "parse null value" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .value = null }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    try std.testing.expect(obj.get("value").?.isNull());
+}
+
+test "parse boolean values" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .enabled = true, .disabled = false }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    try std.testing.expectEqual(true, obj.get("enabled").?.asBool().?);
+    try std.testing.expectEqual(false, obj.get("disabled").?.asBool().?);
+}
+
+test "parse float" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .value = 3.14159 }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    try std.testing.expectApproxEqAbs(@as(f64, 3.14159), obj.get("value").?.asFloat().?, 0.00001);
+}
+
+test "parse large hex fingerprint with bitcast" {
+    const allocator = std.testing.allocator;
+    const source = ".{ .fingerprint = 0xee480fa30d50cbf6 }";
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    const fp = obj.get("fingerprint").?.asInt().?;
+    const unsigned: u64 = @bitCast(fp);
+    try std.testing.expectEqual(@as(u64, 0xee480fa30d50cbf6), unsigned);
+}
+
+test "parse build.zig.zon format" {
+    const allocator = std.testing.allocator;
+    const source =
+        \\.{
+        \\    .name = .my_lib,
+        \\    .version = "0.1.0",
+        \\    .paths = .{
+        \\        "build.zig",
+        \\        "src",
+        \\    },
+        \\}
+    ;
+    var value = try parse(allocator, source);
+    defer value.deinit(allocator);
+
+    var obj = value.asObject().?;
+    try std.testing.expect(obj.get("name").?.isIdentifier());
+    try std.testing.expectEqualStrings("my_lib", obj.get("name").?.asIdentifier().?);
+    try std.testing.expectEqualStrings("0.1.0", obj.get("version").?.asString().?);
+
+    const paths = obj.get("paths").?.asArray().?;
+    try std.testing.expectEqual(@as(usize, 2), paths.len());
 }

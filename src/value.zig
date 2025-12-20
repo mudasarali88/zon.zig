@@ -9,6 +9,7 @@ pub const Value = union(enum) {
     bool_val: bool,
     number: Number,
     string: []const u8,
+    identifier: []const u8,
     object: Object,
     array: Array,
 
@@ -120,6 +121,7 @@ pub const Value = union(enum) {
     pub fn deinit(self: *Value, allocator: Allocator) void {
         switch (self.*) {
             .string => |s| allocator.free(s),
+            .identifier => |s| allocator.free(s),
             .object => |*o| o.deinit(),
             .array => |*a| a.deinit(),
             else => {},
@@ -133,6 +135,7 @@ pub const Value = union(enum) {
             .bool_val => |b| .{ .bool_val = b },
             .number => |n| .{ .number = n },
             .string => |s| .{ .string = try allocator.dupe(u8, s) },
+            .identifier => |s| .{ .identifier = try allocator.dupe(u8, s) },
             .object => |o| blk: {
                 var new_obj = Object.init(allocator);
                 var it = o.entries.iterator();
@@ -156,8 +159,20 @@ pub const Value = union(enum) {
     pub fn asString(self: *const Value) ?[]const u8 {
         return switch (self.*) {
             .string => |s| s,
+            .identifier => |s| s,
             else => null,
         };
+    }
+
+    pub fn asIdentifier(self: *const Value) ?[]const u8 {
+        return switch (self.*) {
+            .identifier => |s| s,
+            else => null,
+        };
+    }
+
+    pub fn isIdentifier(self: *const Value) bool {
+        return self.* == .identifier;
     }
 
     pub fn asBool(self: *const Value) ?bool {
@@ -205,3 +220,110 @@ pub const Value = union(enum) {
         };
     }
 };
+
+test "Value: null" {
+    var val: Value = .null_val;
+    try std.testing.expect(val.isNull());
+    try std.testing.expect(val.asString() == null);
+}
+
+test "Value: bool" {
+    const val_true: Value = .{ .bool_val = true };
+    const val_false: Value = .{ .bool_val = false };
+
+    try std.testing.expectEqual(true, val_true.asBool().?);
+    try std.testing.expectEqual(false, val_false.asBool().?);
+}
+
+test "Value: int" {
+    const val: Value = .{ .number = .{ .int = 42 } };
+    try std.testing.expectEqual(@as(i64, 42), val.asInt().?);
+    try std.testing.expectApproxEqAbs(@as(f64, 42.0), val.asFloat().?, 0.001);
+}
+
+test "Value: float" {
+    const val: Value = .{ .number = .{ .float = 3.14 } };
+    try std.testing.expectApproxEqAbs(@as(f64, 3.14), val.asFloat().?, 0.001);
+}
+
+test "Value: string" {
+    const allocator = std.testing.allocator;
+    const text = try allocator.dupe(u8, "hello");
+    var val: Value = .{ .string = text };
+    defer val.deinit(allocator);
+
+    try std.testing.expectEqualStrings("hello", val.asString().?);
+    try std.testing.expect(!val.isIdentifier());
+}
+
+test "Value: identifier" {
+    const allocator = std.testing.allocator;
+    const text = try allocator.dupe(u8, "my_package");
+    var val: Value = .{ .identifier = text };
+    defer val.deinit(allocator);
+
+    try std.testing.expectEqualStrings("my_package", val.asIdentifier().?);
+    try std.testing.expectEqualStrings("my_package", val.asString().?);
+    try std.testing.expect(val.isIdentifier());
+}
+
+test "Value: clone" {
+    const allocator = std.testing.allocator;
+    const text = try allocator.dupe(u8, "original");
+    var val: Value = .{ .string = text };
+    defer val.deinit(allocator);
+
+    var cloned = try val.clone(allocator);
+    defer cloned.deinit(allocator);
+
+    try std.testing.expectEqualStrings("original", cloned.asString().?);
+}
+
+test "Value.Object: put and get" {
+    const allocator = std.testing.allocator;
+    var obj = Value.Object.init(allocator);
+    defer obj.deinit();
+
+    try obj.put("name", .{ .bool_val = true });
+    const val = obj.get("name").?;
+    try std.testing.expectEqual(true, val.asBool().?);
+}
+
+test "Value.Object: remove" {
+    const allocator = std.testing.allocator;
+    var obj = Value.Object.init(allocator);
+    defer obj.deinit();
+
+    try obj.put("name", .{ .bool_val = true });
+    try std.testing.expect(obj.remove("name"));
+    try std.testing.expect(obj.get("name") == null);
+}
+
+test "Value.Object: count and keys" {
+    const allocator = std.testing.allocator;
+    var obj = Value.Object.init(allocator);
+    defer obj.deinit();
+
+    try obj.put("a", .{ .bool_val = true });
+    try obj.put("b", .{ .bool_val = false });
+
+    try std.testing.expectEqual(@as(usize, 2), obj.count());
+
+    const k = try obj.keys(allocator);
+    defer allocator.free(k);
+    try std.testing.expectEqual(@as(usize, 2), k.len);
+}
+
+test "Value.Array: append and get" {
+    const allocator = std.testing.allocator;
+    var arr = Value.Array.init(allocator);
+    defer arr.deinit();
+
+    try arr.append(.{ .bool_val = true });
+    try arr.append(.{ .bool_val = false });
+
+    try std.testing.expectEqual(@as(usize, 2), arr.len());
+    try std.testing.expectEqual(true, arr.get(0).?.asBool().?);
+    try std.testing.expectEqual(false, arr.get(1).?.asBool().?);
+    try std.testing.expect(arr.get(99) == null);
+}

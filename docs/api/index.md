@@ -1,149 +1,275 @@
 # API Overview
 
-zon.zig provides a simple, direct API for reading and writing ZON files.
+Complete API reference for zon.zig.
 
-## Module Structure
+## Module Functions
 
-```
-zon.zig
-├── zon          # Main module with public functions
-├── Document     # Document struct for all operations
-├── Value        # Core value types
-├── version      # Library version string
-└── update_checker # Optional update notifications
-```
+Top-level functions exposed by the `zon` module.
 
-## Quick Reference
-
-### Module Functions
+### Document Creation
 
 ```zig
 const zon = @import("zon");
 
-// Create/Open/Parse
-var doc = zon.create(allocator);         // New empty document
-var doc = try zon.open(allocator, path); // Open file
-var doc = try zon.parse(allocator, src); // Parse string
+// Create empty document
+var doc = zon.create(allocator);
 
-// File utilities
-const exists = zon.fileExists(path);
-try zon.copyFile(src, dst);
-try zon.renameFile(old, new);
-try zon.deleteFile(path);
+// Open file
+var doc = try zon.open(allocator, "config.zon");
 
-// Update checker
+// Parse string
+var doc = try zon.parse(allocator, source);
+```
+
+### File Utilities
+
+```zig
+// Check if file exists
+if (zon.fileExists("config.zon")) { ... }
+
+// Copy file
+try zon.copyFile("source.zon", "dest.zon");
+
+// Rename file
+try zon.renameFile("old.zon", "new.zon");
+
+// Delete file
+try zon.deleteFile("temp.zon");
+```
+
+### Update Checking
+
+```zig
+// Disable update notifications
 zon.disableUpdateCheck();
+
+// Enable update notifications
 zon.enableUpdateCheck();
+
+// Check if enabled
+if (zon.isUpdateCheckEnabled()) { ... }
+
+// Manual check
 zon.checkForUpdates(allocator);
-
-// Version
-const ver = zon.version; // "0.0.1"
 ```
 
-### Document Methods
+### Version
 
 ```zig
-// Getters
-doc.getString("path")     // ?[]const u8
-doc.getInt("path")        // ?i64
-doc.getFloat("path")      // ?f64
-doc.getBool("path")       // ?bool
-doc.exists("path")        // bool
-doc.isNull("path")        // bool
-doc.getType("path")       // ?[]const u8
-doc.getValue("path")      // ?*const Value
-doc.isEmpty()             // bool
-
-// Setters
-try doc.setString("path", "value");
-try doc.setInt("path", 123);
-try doc.setFloat("path", 3.14);
-try doc.setBool("path", true);
-try doc.setNull("path");
-try doc.setObject("path");
-try doc.setArray("path");
-try doc.setValue("path", value);
-
-// Modification
-doc.delete("path");       // bool
-doc.clear();
-doc.count();              // usize
-try doc.keys();           // [][]const u8
-
-// Arrays
-doc.arrayLen("path");                    // ?usize
-doc.getArrayString("path", index);       // ?[]const u8
-doc.getArrayInt("path", index);          // ?i64
-doc.getArrayBool("path", index);         // ?bool
-try doc.appendToArray("path", "value");
-try doc.appendIntToArray("path", 123);
-try doc.appendFloatToArray("path", 3.14);
-try doc.appendBoolToArray("path", true);
-
-// Find & Replace
-try doc.findString("needle");            // [][]const u8
-try doc.findExact("needle");             // [][]const u8
-try doc.replaceAll("find", "replace");   // usize
-try doc.replaceFirst("find", "replace"); // bool
-try doc.replaceLast("find", "replace");  // bool
-
-// Merge & Clone
-try doc.merge(&other);
-var copy = try doc.clone();
-try doc.diff(&other);    // [][]const u8
-
-// Output
-try doc.save();
-try doc.saveAs("path");
-try doc.toString();           // []u8 (4-space)
-try doc.toCompactString();    // []u8 (no indent)
-try doc.toPrettyString(2);    // []u8 (custom)
-
-// Access
-doc.getObject("path");   // ?*Value.Object
-doc.getArray("path");    // ?*Value.Array
-
-// Cleanup
-doc.deinit();
+// Get version string
+std.debug.print("Version: {s}\n", .{zon.version});
 ```
 
-### Value Types
+## Document Methods
+
+### Getters
+
+| Method                | Return          | Description          |
+| --------------------- | --------------- | -------------------- |
+| `getString(path)`     | `?[]const u8`   | Get string value     |
+| `getIdentifier(path)` | `?[]const u8`   | Get identifier value |
+| `getBool(path)`       | `?bool`         | Get boolean value    |
+| `getInt(path)`        | `?i64`          | Get integer value    |
+| `getFloat(path)`      | `?f64`          | Get float value      |
+| `getNumber(path)`     | `?f64`          | Alias for getFloat   |
+| `getValue(path)`      | `?*const Value` | Get raw Value        |
+
+### Setters
+
+| Method                       | Description               |
+| ---------------------------- | ------------------------- |
+| `setString(path, value)`     | Set string value          |
+| `setIdentifier(path, value)` | Set identifier (`.value`) |
+| `setBool(path, value)`       | Set boolean value         |
+| `setInt(path, value)`        | Set integer value         |
+| `setFloat(path, value)`      | Set float value           |
+| `setNumber(path, value)`     | Alias for setFloat        |
+| `setNull(path)`              | Set to null               |
+| `setObject(path)`            | Create empty object       |
+| `setArray(path)`             | Create empty array        |
+| `setValue(path, value)`      | Set raw Value             |
+
+### Checkers
+
+| Method               | Return        | Description                  |
+| -------------------- | ------------- | ---------------------------- |
+| `exists(path)`       | `bool`        | Check if path exists         |
+| `isNull(path)`       | `bool`        | Check if value is null       |
+| `isIdentifier(path)` | `bool`        | Check if value is identifier |
+| `getType(path)`      | `?[]const u8` | Get type name                |
+| `isEmpty()`          | `bool`        | Check if document empty      |
+
+### Modification
+
+| Method         | Return          | Description         |
+| -------------- | --------------- | ------------------- |
+| `delete(path)` | `bool`          | Delete key          |
+| `clear()`      | `void`          | Clear all data      |
+| `count()`      | `usize`         | Number of root keys |
+| `keys()`       | `![][]const u8` | Get all root keys   |
+
+### Array Operations
+
+| Method                            | Return          | Description         |
+| --------------------------------- | --------------- | ------------------- |
+| `arrayLen(path)`                  | `?usize`        | Get array length    |
+| `getArrayElement(path, index)`    | `?*const Value` | Get element         |
+| `getArrayString(path, index)`     | `?[]const u8`   | Get string element  |
+| `getArrayInt(path, index)`        | `?i64`          | Get integer element |
+| `getArrayBool(path, index)`       | `?bool`         | Get boolean element |
+| `appendToArray(path, string)`     | `!void`         | Append string       |
+| `appendIntToArray(path, int)`     | `!void`         | Append integer      |
+| `appendFloatToArray(path, float)` | `!void`         | Append float        |
+| `appendBoolToArray(path, bool)`   | `!void`         | Append boolean      |
+
+### Find & Replace
+
+| Method                        | Return          | Description                 |
+| ----------------------------- | --------------- | --------------------------- |
+| `findString(needle)`          | `![][]const u8` | Find paths containing       |
+| `findExact(needle)`           | `![][]const u8` | Find paths with exact match |
+| `replaceAll(find, replace)`   | `!usize`        | Replace all occurrences     |
+| `replaceFirst(find, replace)` | `!bool`         | Replace first occurrence    |
+| `replaceLast(find, replace)`  | `!bool`         | Replace last occurrence     |
+
+### Merge & Clone
+
+| Method         | Return          | Description          |
+| -------------- | --------------- | -------------------- |
+| `merge(other)` | `!void`         | Merge other document |
+| `clone()`      | `!Document`     | Create deep copy     |
+| `diff(other)`  | `![][]const u8` | Get differing keys   |
+
+### Output
+
+| Method                   | Return  | Description           |
+| ------------------------ | ------- | --------------------- |
+| `toString()`             | `![]u8` | 4-space indent        |
+| `toCompactString()`      | `![]u8` | No indentation        |
+| `toPrettyString(indent)` | `![]u8` | Custom indent         |
+| `save()`                 | `!void` | Save to original path |
+| `saveAs(path)`           | `!void` | Save to new path      |
+
+### Cleanup
 
 ```zig
-const Value = union(enum) {
+doc.deinit(); // Always call when done
+```
+
+## Value Types
+
+### Value Union
+
+```zig
+pub const Value = union(enum) {
     null_val,
     bool_val: bool,
     number: Number,
     string: []const u8,
+    identifier: []const u8,
     object: Object,
     array: Array,
 };
+```
 
-const Number = union(enum) {
-    int: i64,
-    float: f64,
+### Value Methods
+
+| Method              | Return        | Description         |
+| ------------------- | ------------- | ------------------- |
+| `asString()`        | `?[]const u8` | Get as string       |
+| `asIdentifier()`    | `?[]const u8` | Get as identifier   |
+| `asBool()`          | `?bool`       | Get as boolean      |
+| `asInt()`           | `?i64`        | Get as integer      |
+| `asFloat()`         | `?f64`        | Get as float        |
+| `asObject()`        | `?*Object`    | Get as object       |
+| `asArray()`         | `?*Array`     | Get as array        |
+| `isNull()`          | `bool`        | Check if null       |
+| `isIdentifier()`    | `bool`        | Check if identifier |
+| `clone(allocator)`  | `!Value`      | Deep copy           |
+| `deinit(allocator)` | `void`        | Free memory         |
+
+## Error Types
+
+### ParseError
+
+```zig
+pub const ParseError = error{
+    UnexpectedToken,
+    InvalidNumber,
+    InvalidString,
+    UnterminatedString,
+    OutOfMemory,
 };
 ```
 
-## Error Handling
+## Type Name Strings
 
-- **Getters** return `null` for missing paths or type mismatches
-- **Setters** return `!void` (can error on OutOfMemory)
-- **Parse** returns `ParseError` on invalid syntax
-- **File ops** return standard I/O errors
+The `getType()` method returns these strings:
 
-## Memory Management
+| Value             | Type String    |
+| ----------------- | -------------- |
+| `null`            | `"null"`       |
+| `true`/`false`    | `"bool"`       |
+| Integer           | `"int"`        |
+| Float             | `"float"`      |
+| `"string"`        | `"string"`     |
+| `.identifier`     | `"identifier"` |
+| `.{ ... }` object | `"object"`     |
+| `.{ ... }` array  | `"array"`      |
 
-All Documents must be deinitialized:
+## Quick Reference
 
 ```zig
-var doc = zon.create(allocator);
-defer doc.deinit(); // Always cleanup
-```
+const std = @import("std");
+const zon = @import("zon");
 
-Returned strings from `toString()`, `keys()`, etc. must be freed:
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-```zig
-const output = try doc.toString();
-defer allocator.free(output);
+    zon.disableUpdateCheck();
+
+    // Create
+    var doc = zon.create(allocator);
+    defer doc.deinit();
+
+    // Set
+    try doc.setIdentifier("name", "myapp");
+    try doc.setString("version", "1.0.0");
+    try doc.setInt("port", 8080);
+    try doc.setBool("debug", true);
+    try doc.setFloat("rate", 0.05);
+    try doc.setNull("password");
+
+    // Nested
+    try doc.setString("db.host", "localhost");
+    try doc.setInt("db.port", 5432);
+
+    // Arrays
+    try doc.setArray("paths");
+    try doc.appendToArray("paths", "src");
+    try doc.appendToArray("paths", "lib");
+
+    // Get
+    const name = doc.getIdentifier("name").?;
+    const port = doc.getInt("port").?;
+    const len = doc.arrayLen("paths").?;
+
+    // Check
+    _ = doc.exists("port");
+    _ = doc.isNull("password");
+    _ = doc.isIdentifier("name");
+    _ = doc.getType("port");
+
+    // Modify
+    _ = doc.delete("debug");
+
+    // Output
+    const output = try doc.toString();
+    defer allocator.free(output);
+
+    // Save
+    try doc.saveAs("config.zon");
+}
 ```

@@ -47,7 +47,8 @@ export default defineConfig({
             { text: 'Basic Usage', link: '/guide/basic-usage' },
             { text: 'Reading Files', link: '/guide/reading' },
             { text: 'Writing Files', link: '/guide/writing' },
-            { text: 'Nested Paths', link: '/guide/nested-paths' }
+            { text: 'Nested Paths', link: '/guide/nested-paths' },
+            { text: 'Identifier Values', link: '/guide/identifier-values' }
           ]
         },
         {

@@ -1,57 +1,139 @@
 # What is zon.zig?
 
-zon.zig is a simple, direct Zig library for reading and writing ZON (Zig Object Notation) files. It provides a clean, intuitive API for configuration file management and data serialization.
+A simple, direct Zig library for reading and writing ZON (Zig Object Notation) files.
 
-## Why zon.zig?
+## Overview
 
-ZON is the native configuration format for Zig projects, used in `build.zig.zon` files. While Zig provides AST-based parsing through `std.zig.Ast`, this approach is complex and exposes internal compiler details.
+zon.zig provides a high-level API for working with ZON files without relying on Zig compiler internals. It's designed for configuration files, package manifests, and structured data.
 
-zon.zig provides a simpler alternative:
+## Key Features
 
-- **Path-based access** - Use dot notation to navigate nested structures
-- **Auto-creation** - Missing intermediate objects are created automatically
-- **Type-safe getters** - Returns `null` for missing paths or type mismatches
-- **No panics** - Safe by default, no unexpected crashes
-- **Custom parser** - Does not depend on `std.zig.Ast` or compiler internals
-- **Cross-platform** - Windows, Linux, macOS (32-bit and 64-bit)
-- **Update checker** - Optional auto-update checking (can be disabled)
+| Feature                 | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| **Simple API**          | Intuitive getter/setter interface              |
+| **Nested Paths**        | Access deep values with `"server.ssl.enabled"` |
+| **Identifier Values**   | Support `.name = .value` syntax                |
+| **Auto-create Objects** | Intermediate objects created automatically     |
+| **Find & Replace**      | Search and replace across documents            |
+| **Merge & Clone**       | Combine and duplicate documents                |
+| **Pretty Print**        | Configurable output formatting                 |
+| **No Dependencies**     | Pure Zig, no external libraries                |
 
 ## Use Cases
 
-- Reading and modifying `build.zig.zon` files
-- Configuration file management
-- Data serialization in ZON format
-- Build system tooling
+- **Configuration files** - Application settings
+- **Package manifests** - `build.zig.zon` parsing
+- **Data storage** - Structured data persistence
+- **Migration tools** - Convert between formats
 
-## Example
+## Quick Example
 
 ```zig
+const std = @import("std");
 const zon = @import("zon");
 
-// Disable update checking if desired
-zon.disableUpdateCheck();
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-// Open existing file
-var doc = try zon.open(allocator, "build.zig.zon");
-defer doc.deinit();
+    zon.disableUpdateCheck();
 
-// Read values
-const name = doc.getString("name");
-const version = doc.getString("version");
+    // Create document
+    var doc = zon.create(allocator);
+    defer doc.deinit();
 
-// Modify values
-try doc.setString("version", "2.0.0");
+    // Set values
+    try doc.setIdentifier("name", "my_app");
+    try doc.setString("version", "1.0.0");
+    try doc.setInt("port", 8080);
 
-// Save changes
-try doc.save();
+    // Nested paths (auto-creates intermediate objects)
+    try doc.setString("database.host", "localhost");
+    try doc.setInt("database.port", 5432);
+
+    // Arrays
+    try doc.setArray("paths");
+    try doc.appendToArray("paths", "src");
+    try doc.appendToArray("paths", "lib");
+
+    // Output
+    const output = try doc.toString();
+    defer allocator.free(output);
+    std.debug.print("{s}\n", .{output});
+}
 ```
 
-## Version
+**Output:**
 
-Current version: **0.0.1**
+```zig
+.{
+    .database = .{
+        .host = "localhost",
+        .port = 5432,
+    },
+    .name = .my_app,
+    .paths = .{
+        "src",
+        "lib",
+    },
+    .port = 8080,
+    .version = "1.0.0",
+}
+```
+
+## Supported ZON Syntax
+
+| Syntax      | Example               |
+| ----------- | --------------------- |
+| Strings     | `"hello"`             |
+| Identifiers | `.my_package`         |
+| Integers    | `42`, `0xFF`, `0o755` |
+| Floats      | `3.14`                |
+| Booleans    | `true`, `false`       |
+| Null        | `null`                |
+| Objects     | `.{ .key = value }`   |
+| Arrays      | `.{ "a", "b" }`       |
+| Comments    | `// comment`          |
+
+## API Style
+
+All getters return optionals for safe access:
+
+```zig
+const name = doc.getString("name") orelse "default";
+const port = doc.getInt("port") orelse 8080;
+
+if (doc.exists("database.host")) {
+    // ...
+}
+```
+
+All setters can return errors for allocation failures:
+
+```zig
+try doc.setString("key", "value");
+try doc.setInt("port", 8080);
+```
+
+## Comparison with Alternatives
+
+| Feature             | zon.zig | std.zig.Ast |
+| ------------------- | ------- | ----------- |
+| High-level API      | ✅      | ❌          |
+| Nested paths        | ✅      | ❌          |
+| Auto-create objects | ✅      | ❌          |
+| Find/replace        | ✅      | ❌          |
+| Identifier values   | ✅      | ✅          |
+| Memory safe         | ✅      | ✅          |
+
+## Requirements
+
+- Zig 0.15.0 or later
+- No external dependencies
 
 ## Next Steps
 
-- [Getting Started](/guide/getting-started) - Set up zon.zig in your project
-- [Installation](/guide/installation) - Detailed installation instructions
-- [API Reference](/api/) - Complete API documentation
+- [Getting Started](./getting-started.md) - Installation and setup
+- [Basic Usage](./basic-usage.md) - Core operations
+- [API Reference](../api/) - Complete API documentation

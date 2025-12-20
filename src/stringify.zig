@@ -71,9 +71,15 @@ fn stringifyValue(buffer: *Buffer, value: *const Value, indent: usize, indent_si
             },
         },
         .string => |s| try stringifyString(buffer, s),
+        .identifier => |s| try stringifyIdentifier(buffer, s),
         .object => |o| try stringifyObject(buffer, &o, indent, indent_size),
         .array => |a| try stringifyArray(buffer, &a, indent, indent_size),
     }
+}
+
+fn stringifyIdentifier(buffer: *Buffer, s: []const u8) StringifyError!void {
+    try buffer.append('.');
+    try buffer.appendSlice(s);
 }
 
 fn stringifyString(buffer: *Buffer, s: []const u8) StringifyError!void {
@@ -143,4 +149,113 @@ fn stringifyArray(buffer: *Buffer, arr: *const Value.Array, indent: usize, inden
 
 fn appendIndent(buffer: *Buffer, count: usize) StringifyError!void {
     try buffer.appendNTimes(' ', count);
+}
+
+test "stringify: null" {
+    const allocator = std.testing.allocator;
+    var val: Value = .null_val;
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("null", result);
+}
+
+test "stringify: bool true" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .bool_val = true };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("true", result);
+}
+
+test "stringify: bool false" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .bool_val = false };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("false", result);
+}
+
+test "stringify: int" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .number = .{ .int = 42 } };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("42", result);
+}
+
+test "stringify: float" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .number = .{ .float = 3.14 } };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "3.14") != null);
+}
+
+test "stringify: string" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .string = "hello" };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("\"hello\"", result);
+}
+
+test "stringify: identifier" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .identifier = "my_package" };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings(".my_package", result);
+}
+
+test "stringify: string with escapes" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .string = "hello\nworld" };
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings("\"hello\\nworld\"", result);
+}
+
+test "stringify: empty object" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .object = Value.Object.init(allocator) };
+    defer val.deinit(allocator);
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings(".{}", result);
+}
+
+test "stringify: empty array" {
+    const allocator = std.testing.allocator;
+    var val: Value = .{ .array = Value.Array.init(allocator) };
+    defer val.deinit(allocator);
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings(".{}", result);
+}
+
+test "stringify: object with value" {
+    const allocator = std.testing.allocator;
+    var obj = Value.Object.init(allocator);
+    try obj.put("name", .{ .string = try allocator.dupe(u8, "test") });
+    var val: Value = .{ .object = obj };
+    defer val.deinit(allocator);
+
+    const result = try stringify(allocator, &val, .{});
+    defer allocator.free(result);
+
+    try std.testing.expect(std.mem.indexOf(u8, result, ".name") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "\"test\"") != null);
+}
+
+test "stringify: compact output" {
+    const allocator = std.testing.allocator;
+    var obj = Value.Object.init(allocator);
+    try obj.put("a", .{ .bool_val = true });
+    var val: Value = .{ .object = obj };
+    defer val.deinit(allocator);
+
+    const result = try stringify(allocator, &val, .{ .indent = 0 });
+    defer allocator.free(result);
+
+    try std.testing.expect(std.mem.indexOf(u8, result, "    ") == null);
 }

@@ -1,41 +1,70 @@
 # Module Functions
 
-The main `zon` module provides top-level functions for working with ZON documents and files.
+Top-level functions in the `zon` module.
 
-## Creating Documents
+## Import
+
+```zig
+const zon = @import("zon");
+```
+
+## Document Creation
 
 ### create
 
-Creates a new, empty ZON document.
+Create an empty ZON document.
+
+```zig
+pub fn create(allocator: Allocator) Document
+```
+
+**Example:**
 
 ```zig
 var doc = zon.create(allocator);
 defer doc.deinit();
+
+try doc.setString("name", "myapp");
 ```
 
 ### open
 
-Opens and parses an existing ZON file.
+Open and parse a ZON file.
+
+```zig
+pub fn open(allocator: Allocator, file_path: []const u8) !Document
+```
+
+**Example:**
 
 ```zig
 var doc = try zon.open(allocator, "config.zon");
 defer doc.deinit();
+
+const name = doc.getString("name");
 ```
 
 **Errors:**
 
-- `FileNotFound` - File doesn't exist
-- `AccessDenied` - Permission denied
-- `UnexpectedToken` - Invalid ZON syntax
+- `error.FileNotFound` - File doesn't exist
+- `error.UnexpectedToken` - Invalid ZON syntax
+- `error.OutOfMemory` - Allocation failed
 
 ### parse
 
-Parses ZON content from a string.
+Parse ZON from a string.
+
+```zig
+pub fn parse(allocator: Allocator, source: []const u8) !Document
+```
+
+**Example:**
 
 ```zig
 const source =
     \\.{
     \\    .name = "myapp",
+    \\    .version = "1.0.0",
     \\}
 ;
 
@@ -45,26 +74,41 @@ defer doc.deinit();
 
 **Errors:**
 
-- `UnexpectedToken` - Invalid syntax
-- `InvalidNumber` - Malformed number
-- `InvalidString` - Malformed string
-- `OutOfMemory` - Allocation failed
+- `error.UnexpectedToken` - Invalid syntax
+- `error.InvalidNumber` - Malformed number
+- `error.UnterminatedString` - Missing closing quote
 
 ## File Utilities
 
 ### fileExists
 
-Checks if a file exists.
+Check if a file exists.
+
+```zig
+pub fn fileExists(file_path: []const u8) bool
+```
+
+**Example:**
 
 ```zig
 if (zon.fileExists("config.zon")) {
-    // File exists
+    var doc = try zon.open(allocator, "config.zon");
+    defer doc.deinit();
+    // ...
+} else {
+    std.debug.print("Config not found, using defaults\n", .{});
 }
 ```
 
 ### copyFile
 
-Copies a file to a new location.
+Copy a file.
+
+```zig
+pub fn copyFile(source_path: []const u8, dest_path: []const u8) !void
+```
+
+**Example:**
 
 ```zig
 try zon.copyFile("config.zon", "config.zon.backup");
@@ -72,33 +116,58 @@ try zon.copyFile("config.zon", "config.zon.backup");
 
 ### renameFile
 
-Renames or moves a file.
+Rename or move a file.
 
 ```zig
-try zon.renameFile("old.zon", "new.zon");
+pub fn renameFile(old_path: []const u8, new_path: []const u8) !void
+```
+
+**Example:**
+
+```zig
+try zon.renameFile("config.old.zon", "config.zon");
 ```
 
 ### deleteFile
 
-Deletes a file.
+Delete a file.
+
+```zig
+pub fn deleteFile(file_path: []const u8) !void
+```
+
+**Example:**
 
 ```zig
 try zon.deleteFile("temp.zon");
 ```
 
-## Update Checker
+## Update Checking
 
 ### disableUpdateCheck
 
-Disables automatic update checking.
+Disable update notifications.
 
 ```zig
+pub fn disableUpdateCheck() void
+```
+
+**Example:**
+
+```zig
+// Disable at startup
 zon.disableUpdateCheck();
 ```
 
 ### enableUpdateCheck
 
-Enables automatic update checking.
+Enable update notifications.
+
+```zig
+pub fn enableUpdateCheck() void
+```
+
+**Example:**
 
 ```zig
 zon.enableUpdateCheck();
@@ -106,48 +175,54 @@ zon.enableUpdateCheck();
 
 ### isUpdateCheckEnabled
 
-Returns whether update checking is enabled.
+Check if update notifications are enabled.
+
+```zig
+pub fn isUpdateCheckEnabled() bool
+```
+
+**Example:**
 
 ```zig
 if (zon.isUpdateCheckEnabled()) {
-    // Updates are enabled
+    std.debug.print("Update checking is on\n", .{});
 }
 ```
 
 ### checkForUpdates
 
-Manually checks for updates and prints notification if available.
+Manually check for updates.
+
+```zig
+pub fn checkForUpdates(allocator: Allocator) void
+```
+
+**Example:**
 
 ```zig
 zon.checkForUpdates(allocator);
 ```
 
-## Version Information
+## Constants
 
 ### version
 
-The current library version string.
+Library version string.
 
 ```zig
-const ver = zon.version; // "0.0.1"
+pub const version: []const u8 = "0.0.1";
 ```
 
-## Exported Types
-
-### Document
-
-The main document type for all operations.
+**Example:**
 
 ```zig
-pub const Document = document.Document;
+std.debug.print("zon.zig v{s}\n", .{zon.version});
 ```
 
-### Value
+**Output:**
 
-The core value type representing all ZON data types.
-
-```zig
-pub const Value = @import("value.zig").Value;
+```
+zon.zig v0.0.1
 ```
 
 ## Complete Example
@@ -161,29 +236,58 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Disable update checking for production
+    // Disable update notifications
     zon.disableUpdateCheck();
+
+    // Print version
+    std.debug.print("zon.zig v{s}\n", .{zon.version});
 
     // Check if config exists
     if (zon.fileExists("config.zon")) {
-        // Open existing
+        std.debug.print("Found existing config\n", .{});
+
+        // Backup before modifying
+        try zon.copyFile("config.zon", "config.zon.backup");
+
+        // Open and modify
         var doc = try zon.open(allocator, "config.zon");
         defer doc.deinit();
 
-        std.debug.print("Config: {s}\n", .{doc.getString("name") orelse "unknown"});
+        try doc.setString("modified", "true");
+        try doc.save();
     } else {
+        std.debug.print("Creating new config\n", .{});
+
         // Create new
         var doc = zon.create(allocator);
         defer doc.deinit();
 
-        try doc.setString("name", "myapp");
+        try doc.setIdentifier("name", "myapp");
         try doc.setString("version", "1.0.0");
-
         try doc.saveAs("config.zon");
-        std.debug.print("Created config.zon\n", .{});
     }
 
-    // Show library version
-    std.debug.print("zon.zig version: {s}\n", .{zon.version});
+    // Parse from string
+    const source = ".{ .test = true }";
+    var parsed = try zon.parse(allocator, source);
+    defer parsed.deinit();
+
+    std.debug.print("Parsed: {}\n", .{parsed.getBool("test").?});
 }
+```
+
+**Output (first run):**
+
+```
+zon.zig v0.0.1
+Creating new config
+Parsed: true
+```
+
+**Output (second run):**
+
+```
+zon.zig v0.0.1
+Found existing config
+Parsed: true
 ```
