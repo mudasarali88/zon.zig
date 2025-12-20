@@ -1,0 +1,55 @@
+# Zig build artifacts
+zig-out/
+.zig-cache/
+zig-cache/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build outputs
+*.o
+*.a
+*.lib
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# Generated files
+output.zon
+*.zon.bak
+
+# VitePress documentation
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+docs/bun.lockb
+docs/package-lock.json
+docs/yarn.lock
+
+# Package manager locks (use bun)
+node_modules/
+
+# Test outputs
+test-output/
+*.log
+
+# Coverage
+coverage/
+*.gcov
+*.gcda
+*.gcno
