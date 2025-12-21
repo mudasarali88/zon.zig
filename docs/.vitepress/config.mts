@@ -7,6 +7,8 @@ export default defineConfig({
   
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+    // Apple touch icon (uses site logo)
+    ['link', { rel: 'apple-touch-icon', href: '/logo.svg' }],
     ['link', { rel: 'canonical', href: 'https://muhammad-fiaz.github.io/zon.zig/' }],
     ['meta', { name: 'viewport', content: 'width=device-width, initial-scale=1' }],
     ['meta', { name: 'theme-color', content: '#f7a41d' }],
@@ -60,6 +62,7 @@ export default defineConfig({
             { text: 'Basic Usage', link: '/guide/basic-usage' },
             { text: 'Reading Files', link: '/guide/reading' },
             { text: 'Writing Files', link: '/guide/writing' },
+            { text: 'File Operations', link: '/guide/file-operations' },
             { text: 'Nested Paths', link: '/guide/nested-paths' },
             { text: 'Identifier Values', link: '/guide/identifier-values' }
           ]
